@@ -174,20 +174,27 @@ Same as the Managed VNet flavor — see `scripts/setup_aisearch_index.py`. It's 
 Per the [Foundry docs verification steps](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks#verify-the-deployment):
 
 ```bash
+RG=rg-fun-byo-dev
+PREFIX=funbyodev
+
 # 1. Confirm subnet delegation
 az network vnet subnet show \
-  -g rg-fun-byo-dev -n snet-funbyodev-agent --vnet-name vnet-funbyodev \
+  -g $RG -n snet-${PREFIX}-agent --vnet-name vnet-${PREFIX} \
   --query "delegations[].serviceName" -o tsv
 # Expected: Microsoft.App/environments
 
-# 2. Confirm public access disabled on all data resources
-for resource in foundry search cosmos storage; do ... done
+# 2. Confirm publicNetworkAccess is Disabled on all four data resources
+az cognitiveservices account show -n ais-${PREFIX}     -g $RG --query properties.publicNetworkAccess -o tsv
+az search service show           -n srch-${PREFIX}     -g $RG --query publicNetworkAccess           -o tsv
+az cosmosdb show                 -n cosmos-${PREFIX}   -g $RG --query publicNetworkAccess           -o tsv
+az storage account show          -n st${PREFIX}        -g $RG --query publicNetworkAccess           -o tsv
+# All four should print: Disabled
 
-# 3. From the jumpbox, validate DNS resolves to private IPs
-nslookup ais-funbyodev.cognitiveservices.azure.com   # should return 10.0.1.x
-nslookup srch-funbyodev.search.windows.net           # should return 10.0.1.x
-nslookup cosmos-funbyodev.documents.azure.com        # should return 10.0.1.x
-nslookup stfunbyodev.blob.core.windows.net           # should return 10.0.1.x
+# 3. From the jumpbox, validate DNS resolves to private IPs (RDP via Bastion first)
+nslookup ais-${PREFIX}.cognitiveservices.azure.com   # should return 10.0.1.x
+nslookup srch-${PREFIX}.search.windows.net           # should return 10.0.1.x
+nslookup cosmos-${PREFIX}.documents.azure.com        # should return 10.0.1.x
+nslookup st${PREFIX}.blob.core.windows.net           # should return 10.0.1.x
 
 # 4. Open the Foundry project in the portal (from jumpbox) and create a test agent
 ```
@@ -198,12 +205,20 @@ This template deploys the infrastructure for **both**. You choose which one to u
 
 | | **Hosted agent** | **Prompt agent** |
 |---|---|---|
-| Compute | Your container image (via ACR) | Microsoft-managed |
+| Compute | Your container image (via ACR — **see note below**) | Microsoft-managed |
 | You control CPU/memory? | ✅ | ❌ |
 | Consumes subnet IPs per revision? | ✅ (~1 IP per Hosted agent + 1 per active revision during rollout) | ❌ (shares project Data Proxy) |
 | Max active revisions per agent | 100 | n/a |
 | Max instances per Foundry account | ~200 Hosted agents | ~250 projects total |
 | Use when | You need custom packages, full control, predictable performance | You just want to define agent behavior in config; MS handles scaling |
+
+> ⚠️ **Not included in this template:** an **Azure Container Registry (ACR)** for Hosted-agent images. If you only use **Prompt agents**, you need nothing extra. To use **Hosted agents**, add an ACR (with a private endpoint into the same `snet-<prefix>-pe` subnet and the `privatelink.azurecr.io` DNS zone), grant the project MI `AcrPull`, and reference image tags when creating each agent. The Foundry Agent Service docs cover the ACR wiring in the same [virtual-networks how-to](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks).
+
+## Deeper background
+
+The data layer (Cosmos/Storage/Search + `capabilityHost` + two-phase RBAC + DNS) is identical to the Managed VNet flavor. The "**why**" behind every piece of that layer — why all three BYO resources are mandatory, why RBAC is split into two phases, why the `capabilityHost` is the linchpin — is documented at length in the sibling repo. Read it once and you understand both flavors:
+
+👉 [Managed VNet repo → Understanding the design](https://github.com/SridharArrabelly/foundry-private-managed-vnet#understanding-the-design-why-is-this-so-complex)
 
 ## Troubleshooting
 
