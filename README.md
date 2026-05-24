@@ -201,6 +201,8 @@ nslookup st${PREFIX}.blob.core.windows.net           # should return 10.0.1.x
 
 ## Hosted vs Prompt agents
 
+> 📖 **Terminology:** Both Hosted and Prompt are **agent types** that run inside a **Standard Setup** project (the project mode where you BYO Cosmos + Storage + AI Search — what this template builds). "Standard Setup" / "Standard Agent" is a project-level setup mode, not an agent type. See the [Managed VNet README terminology note](https://github.com/SridharArrabelly/foundry-private-managed-vnet#foundry-private-networking--managed-vnet-flavor) for the longer explanation.
+
 This template deploys the infrastructure for **both**. You choose which one to use when creating an agent:
 
 | | **Hosted agent** | **Prompt agent** |
