@@ -283,6 +283,77 @@ Still on the jumpbox, open `https://ai.azure.com` → your project → **Agents 
 
 ❌ **"Invalid endpoint or connection failed."** = capabilityHost or connection auth — see [Troubleshooting](#troubleshooting) below.
 
+## Brownfield: deploying into an existing customer VNet
+
+The default template builds a **greenfield** VNet (with NAT Gateway, jumpbox, Bastion) so you can `azd up` and have everything just work. If your customer already runs other workloads in their own VNet (hub-spoke / landing zone / etc.), you don't deploy a new VNet — you **point Foundry at their existing subnet** and skip everything the customer already provides.
+
+### What the customer VNet must provide
+
+| # | Requirement | Why |
+|---|---|---|
+| 1 | **Dedicated subnet, `/24` recommended** (`/26` minimum, ~50 concurrent sessions) | Foundry deploys Data Proxy + Hosted-agent Micro VMs here. ~1 IP per 10 pods + 1 per active Hosted-agent revision. |
+| 2 | That subnet is **empty** and **delegated to `Microsoft.App/environments`** | Subnet delegation is exclusive; the platform owns the subnet. |
+| 3 | **Explicit outbound** from that subnet — NAT Gateway, Azure Firewall, or UDR → NVA | Azure default-outbound retired Sep 30 2025. Foundry pulls model API + ACR images. |
+| 4 | A subnet for **private endpoints** with `privateEndpointNetworkPolicies: Disabled` (can be shared with other workloads) | Houses the 4 PEs (Foundry, Cosmos, Storage, AI Search). |
+| 5 | The 4 `privatelink.*` DNS zones reachable from the VNet — either VNet-linked, or resolvable via a Private DNS Resolver / customer DNS forwarder | So the agent subnet resolves `*.cognitiveservices.azure.com` etc. to PE IPs. |
+| 6 | No NSG/firewall rules blocking: `agent → PE subnet:443`, `agent → internet (model API + ACR)` | Required outbound paths. |
+
+### Pre-flight check (send this to the customer before deploying)
+
+```bash
+VNET_ID=<their VNet ARM ID>
+AGENT_SUBNET=<their delegated subnet ARM ID>
+PE_SUBNET=<their PE subnet ARM ID>
+DNS_RG=<RG containing the privatelink zones>
+
+# 1. Agent subnet is empty and delegated
+az network vnet subnet show --ids $AGENT_SUBNET \
+  --query "{delegation:delegations[0].serviceName, ipConfigs:ipConfigurations}" -o json
+# → delegation: "Microsoft.App/environments", ipConfigs: null
+
+# 2. PE subnet has policies disabled
+az network vnet subnet show --ids $PE_SUBNET --query "privateEndpointNetworkPolicies" -o tsv
+# → Disabled
+
+# 3. Agent subnet has explicit outbound
+az network vnet subnet show --ids $AGENT_SUBNET --query "{nat:natGateway.id, udr:routeTable.id}" -o json
+# At least one non-null
+
+# 4. The 4 privatelink DNS zones exist and link to the VNet
+for zone in privatelink.cognitiveservices.azure.com privatelink.search.windows.net privatelink.documents.azure.com privatelink.blob.core.windows.net; do
+  echo "=== $zone ==="
+  az network private-dns link vnet list --zone-name $zone -g $DNS_RG \
+    --query "[?virtualNetwork.id=='$VNET_ID'].name" -o tsv
+done
+# Each should output a link name (empty = not linked, fix before deploy)
+
+# 5. Required resource providers registered
+for rp in Microsoft.CognitiveServices Microsoft.Search Microsoft.Storage Microsoft.DocumentDB Microsoft.App Microsoft.Network Microsoft.MachineLearningServices; do
+  echo -n "$rp: "; az provider show --namespace $rp --query registrationState -o tsv
+done
+```
+
+### What to change in this template
+
+The data-layer modules (`cosmos.bicep`, `storage.bicep`, `ai-search.bicep`), the Foundry account/project, the `capabilityHost`, and both RBAC modules **stay exactly the same** — they're brand-new Foundry-dedicated resources. The changes are all in the networking edges:
+
+| Change | What to do |
+|---|---|
+| Stop creating the VNet/NAT Gateway/subnets | **Delete** `module network` from `infra/resources.bicep`. Add three params to `main.bicep`: `existingAgentSubnetId`, `existingPeSubnetId`, `existingVnetId`. Replace every `network.outputs.X` reference with the matching param. |
+| Stop creating DNS zones | In `modules/private-endpoints.bicep`, **remove** the `Microsoft.Network/privateDnsZones` resources and their VNet links. On each PE's `privateDnsZoneGroups`, reference the customer's existing zones via `resourceId('<dns-rg>', 'Microsoft.Network/privateDnsZones', 'privatelink.X')`. Add a `dnsZoneResourceGroupName` param. |
+| Skip the jumpbox if they already have VNet access | Delete the `jumpbox` module and the `jumpboxPrincipalId` line in `role-assignments.bicep`. They'll RDP via their existing Bastion / ExpressRoute / VPN / Dev Box. |
+| Run the indexer from inside the VNet | The `postprovision` hook needs an in-VNet runner. Three options: (a) keep the jumpbox just for first-deploy indexing then delete it; (b) point the hook at any existing VM/Dev Box/self-hosted runner via `az vm run-command`; (c) skip the indexer entirely and let Foundry create `vs_*`/`chunks_*` indexes on demand. |
+
+### Cross-RG / cross-subscription notes
+
+- **Cross-RG VNet** (common): the deployment principal needs `Microsoft.Network/virtualNetworks/subnets/join/action` on both subnets — grant **Network Contributor** scoped to each subnet (or their RG).
+- **Cross-subscription VNet**: split into two `azd` deployments, or use a subscription-scope deployment with explicit RG targeting. Foundry account + data resources go in your workload subscription; PEs reference the foreign-subscription subnets by full ARM ID (works fine).
+- **DNS zones in a separate RG** (Cloud Adoption Framework default): use `existing` references and grant **Private DNS Zone Contributor** on the zones to whoever creates the `A` records (auto-created by `privateDnsZoneGroups` on each PE).
+
+### Verify against the customer VNet
+
+Use the same [7-step Verify recipe](#verify-the-deployment) above — just substitute the customer's vnet/subnet names. Step 2 (subnet delegation) now points at the customer's subnet ID instead of `snet-$PREFIX-agent`; the rest is identical.
+
 ## Hosted vs Prompt agents
 
 This template deploys the infrastructure for **both**. You choose which one to use when creating an agent:
