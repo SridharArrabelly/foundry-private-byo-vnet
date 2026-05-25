@@ -24,27 +24,35 @@ End-to-end private-networking reference for **Azure AI Foundry Agents** using th
 
 ## Architecture
 
+```mermaid
+flowchart TB
+  USER(("👤 You"))
+
+  subgraph YOUR["🟦 Your VNet — vnet-PREFIX (10.0.0.0/16)"]
+    direction TB
+    subgraph SNET_PE["snet-pe (10.0.1.0/24)"]
+      PEs["5 Private Endpoints<br/>Foundry · Search · Cosmos · Blob · AMPLS"]:::pe
+    end
+    subgraph SNET_AGENT["snet-agent (10.0.4.0/24, delegated)"]
+      AGENT["Agent runtime<br/>Data Proxy · Hosted / Prompt MicroVMs"]:::yours
+    end
+    subgraph SNET_VM["snet-vm + AzureBastionSubnet"]
+      VM["Jumpbox + Bastion + NAT GW"]:::yours
+    end
+  end
+
+  subgraph BACKEND["🟦 Data plane — publicNetworkAccess: Disabled"]
+    DATA["Foundry · AI Search · Cosmos · Storage · App Insights+LAW"]:::yours
+  end
+
+  USER ==> VM ==> PEs ==> DATA
+  AGENT ==> PEs
+
+  classDef yours fill:#dbeafe,stroke:#1e3a8a,color:#000
+  classDef pe fill:#fed7aa,stroke:#9a3412,color:#000
 ```
-┌─ Your VNet (vnet-<prefix>) ──────────────────────────────────────────────┐
-│                                                                          │
-│  ┌─ snet-<prefix>-pe ─────────────┐    ┌─ snet-<prefix>-agent ─────────┐ │
-│  │  /24                            │    │  /24, DELEGATED               │ │
-│  │                                 │    │  to Microsoft.App/environments│ │
-│  │  ▾ pep-foundry  ───→ Foundry    │    │                               │ │
-│  │  ▾ pep-search   ───→ AI Search  │◀───┤  Data Proxy (1 per project)   │ │
-│  │  ▾ pep-cosmos   ───→ Cosmos     │    │  Hosted-agent Micro VMs       │ │
-│  │  ▾ pep-blob     ───→ Storage    │    │  Prompt-agent infra (shared)  │ │
-│  └─────────────────────────────────┘    └───────────────────────────────┘ │
-│                                                                          │
-│  ┌─ snet-<prefix>-vm ─────────────┐    ┌─ AzureBastionSubnet ──────────┐ │
-│  │  Jumpbox VM + NAT Gateway      │    │  Bastion (browser RDP/SSH)    │ │
-│  └─────────────────────────────────┘    └───────────────────────────────┘ │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-       ▲                              ▲
-       │ Bastion in-browser           │ HTTPS via PE
-   You (laptop)                  Foundry portal calls
-```
+
+📐 **For deeper diagrams** (network topology + DNS, two-phase RBAC chain, request sequence): see [`docs/diagrams.md`](docs/diagrams.md).
 
 **Key difference vs Managed VNet:**
 - ✅ Agent compute IPs are in **your** VNet (auditable, allow-listable)
@@ -107,27 +115,24 @@ If you read the [Foundry networking deep-dive](https://learn.microsoft.com/azure
 
 **Why the deep-dive uses Storage/SQL DB/Key Vault as examples:** they're the most common "PaaS behind a PE" examples Microsoft writers reach for when illustrating *outbound* traffic from the Data Proxy. The deep-dive is **purely about network traffic flow** (IPs, subnets, Data Proxy, revisions) and *assumes* the BYO data trio is already configured — it cross-links to the how-to for that.
 
-```
-Foundry Agent Service request
-        │
-        ▼
-┌─ Layer 1: Foundry runtime (BYO data trio) ────────────┐
-│  needs (mandatory, what THIS template builds):        │
-│    • Cosmos    → thread state                         │
-│    • Storage   → agent files                          │
-│    • AI Search → vector stores                        │
-└───────────────────────────────────────────────────────┘
-        │
-        │ (your agent decides to call a tool)
-        ▼
-┌─ Layer 2: Your tool-server backends (your additions) ─┐
-│  egresses to (optional, add as needed):               │
-│    • SQL DB / Postgres / Cosmos for your app data     │
-│    • Key Vault for your secrets                       │
-│    • A different Storage account for your blobs       │
-│    • A private REST API in another VNet               │
-│    • Anything else your tools need                    │
-└───────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  REQ([Foundry Agent Service request])
+  subgraph L1["Layer 1 — Foundry runtime needs (mandatory, in this template)"]
+    L1A["Cosmos → thread state"]:::yours
+    L1B["Storage → agent files"]:::yours
+    L1C["AI Search → vector stores"]:::yours
+  end
+  subgraph L2["Layer 2 — Your tool-server backends (optional, add as needed)"]
+    L2A["SQL / Postgres / Cosmos<br/>(your app data)"]:::ext
+    L2B["Key Vault (your secrets)"]:::ext
+    L2C["Other Storage (your blobs)"]:::ext
+    L2D["Private REST API in another VNet"]:::ext
+  end
+  REQ --> L1
+  L1 -.your agent decides to call a tool.-> L2
+  classDef yours fill:#dbeafe,stroke:#1e3a8a,color:#000
+  classDef ext fill:#fef3c7,stroke:#92400e,color:#000
 ```
 
 **Adding Layer 2 resources** is straightforward — provision them in `infra/resources.bicep`, add a private endpoint into `snet-<prefix>-pe`, link the matching `privatelink.*` DNS zone to your VNet, and grant your tool's identity the right RBAC. The Data Proxy in `snet-<prefix>-agent` will reach them over the PE automatically.
