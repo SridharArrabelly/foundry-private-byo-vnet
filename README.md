@@ -94,6 +94,42 @@ Per the [deep-dive](https://learn.microsoft.com/azure/foundry/agents/concepts/ag
 | **Jumpbox VM** | Windows + System MI; used for indexer + Bastion-based portal access |
 | **Azure Bastion** | Browser-based RDP without exposing the jumpbox publicly |
 
+## Two layers of private endpoints in this architecture (important!)
+
+If you read the [Foundry networking deep-dive](https://learn.microsoft.com/azure/foundry/agents/concepts/agents-networking-deep-dive) before this README, you'll notice its example diagram shows **Storage, SQL DB, and Key Vault** behind PEs — not Cosmos and AI Search. That's not a contradiction; it's two **different layers** of PEs that need to coexist in a real BYO-VNet deployment.
+
+| Layer | What it is | What sits behind PEs | Required? | Where it's documented |
+|---|---|---|---|---|
+| **1. Foundry runtime infrastructure** *(this template)* | The data layer the Agent Service itself uses internally — thread state, agent files, vector stores | **Cosmos + Storage + AI Search** (the Standard Setup trio) | ✅ Mandatory. The project `capabilityHost` literally has `threadStorageConnections + storageConnections + vectorStoreConnections` as required fields. Skip any and the runtime fails with *"Invalid endpoint or connection failed"*. | [how-to/virtual-networks](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks) |
+| **2. Your tool-server backends** *(out of scope here)* | The downstream resources **your agent's tools** call to do business logic — query a customer DB, fetch a secret, hit your API | Whatever your tools need — examples in the docs are Storage, SQL DB, Key Vault, but it could be Postgres, Redis, a private REST API, anything | Optional. Only needed if your agents call tools against your own backends. | [concepts/agents-networking-deep-dive](https://learn.microsoft.com/azure/foundry/agents/concepts/agents-networking-deep-dive) (the "egress to customer resources" section) |
+
+**Why the deep-dive uses Storage/SQL DB/Key Vault as examples:** they're the most common "PaaS behind a PE" examples Microsoft writers reach for when illustrating *outbound* traffic from the Data Proxy. The deep-dive is **purely about network traffic flow** (IPs, subnets, Data Proxy, revisions) and *assumes* the Standard Setup trio is already configured — it cross-links to the how-to for that.
+
+```
+Foundry Agent Service request
+        │
+        ▼
+┌─ Layer 1: Foundry runtime (Standard Setup trio) ──────┐
+│  needs (mandatory, what THIS template builds):        │
+│    • Cosmos    → thread state                         │
+│    • Storage   → agent files                          │
+│    • AI Search → vector stores                        │
+└───────────────────────────────────────────────────────┘
+        │
+        │ (your agent decides to call a tool)
+        ▼
+┌─ Layer 2: Your tool-server backends (your additions) ─┐
+│  egresses to (optional, add as needed):               │
+│    • SQL DB / Postgres / Cosmos for your app data     │
+│    • Key Vault for your secrets                       │
+│    • A different Storage account for your blobs       │
+│    • A private REST API in another VNet               │
+│    • Anything else your tools need                    │
+└───────────────────────────────────────────────────────┘
+```
+
+**Adding Layer 2 resources** is straightforward — provision them in `infra/resources.bicep`, add a private endpoint into `snet-<prefix>-pe`, link the matching `privatelink.*` DNS zone to your VNet, and grant your tool's identity the right RBAC. The Data Proxy in `snet-<prefix>-agent` will reach them over the PE automatically.
+
 ## What's the same as the Managed VNet flavor
 
 The following modules are **byte-identical** to the validated [Managed VNet repo](https://github.com/SridharArrabelly/foundry-private-managed-vnet):
