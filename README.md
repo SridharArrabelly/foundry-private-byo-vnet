@@ -100,16 +100,16 @@ If you read the [Foundry networking deep-dive](https://learn.microsoft.com/azure
 
 | Layer | What it is | What sits behind PEs | Required? | Where it's documented |
 |---|---|---|---|---|
-| **1. Foundry runtime infrastructure** *(this template)* | The data layer the Agent Service itself uses internally — thread state, agent files, vector stores | **Cosmos + Storage + AI Search** (the Standard Setup trio) | ✅ Mandatory. The project `capabilityHost` literally has `threadStorageConnections + storageConnections + vectorStoreConnections` as required fields. Skip any and the runtime fails with *"Invalid endpoint or connection failed"*. | [how-to/virtual-networks](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks) |
+| **1. Foundry runtime infrastructure** *(this template)* | The data layer the Agent Service itself uses internally — thread state, agent files, vector stores | **Cosmos + Storage + AI Search** (the BYO data trio) | ✅ Mandatory. The project `capabilityHost` literally has `threadStorageConnections + storageConnections + vectorStoreConnections` as required fields. Skip any and the runtime fails with *"Invalid endpoint or connection failed"*. | [how-to/virtual-networks](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks) |
 | **2. Your tool-server backends** *(out of scope here)* | The downstream resources **your agent's tools** call to do business logic — query a customer DB, fetch a secret, hit your API | Whatever your tools need — examples in the docs are Storage, SQL DB, Key Vault, but it could be Postgres, Redis, a private REST API, anything | Optional. Only needed if your agents call tools against your own backends. | [concepts/agents-networking-deep-dive](https://learn.microsoft.com/azure/foundry/agents/concepts/agents-networking-deep-dive) (the "egress to customer resources" section) |
 
-**Why the deep-dive uses Storage/SQL DB/Key Vault as examples:** they're the most common "PaaS behind a PE" examples Microsoft writers reach for when illustrating *outbound* traffic from the Data Proxy. The deep-dive is **purely about network traffic flow** (IPs, subnets, Data Proxy, revisions) and *assumes* the Standard Setup trio is already configured — it cross-links to the how-to for that.
+**Why the deep-dive uses Storage/SQL DB/Key Vault as examples:** they're the most common "PaaS behind a PE" examples Microsoft writers reach for when illustrating *outbound* traffic from the Data Proxy. The deep-dive is **purely about network traffic flow** (IPs, subnets, Data Proxy, revisions) and *assumes* the BYO data trio is already configured — it cross-links to the how-to for that.
 
 ```
 Foundry Agent Service request
         │
         ▼
-┌─ Layer 1: Foundry runtime (Standard Setup trio) ──────┐
+┌─ Layer 1: Foundry runtime (BYO data trio) ────────────┐
 │  needs (mandatory, what THIS template builds):        │
 │    • Cosmos    → thread state                         │
 │    • Storage   → agent files                          │
@@ -236,8 +236,6 @@ nslookup st${PREFIX}.blob.core.windows.net           # should return 10.0.1.x
 ```
 
 ## Hosted vs Prompt agents
-
-> 📖 **Terminology:** Both Hosted and Prompt are **agent types** that run inside a **Standard Setup** project (the project mode where you BYO Cosmos + Storage + AI Search — what this template builds). "Standard Setup" / "Standard Agent" is a project-level setup mode, not an agent type. See the [Managed VNet README terminology note](https://github.com/SridharArrabelly/foundry-private-managed-vnet#foundry-private-networking--managed-vnet-flavor) for the longer explanation.
 
 This template deploys the infrastructure for **both**. You choose which one to use when creating an agent:
 
