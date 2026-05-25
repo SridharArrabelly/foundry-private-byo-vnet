@@ -207,33 +207,81 @@ Same as the Managed VNet flavor — see `scripts/setup_aisearch_index.py`. It's 
 
 ## Verify the deployment
 
-Per the [Foundry docs verification steps](https://learn.microsoft.com/azure/foundry/agents/how-to/virtual-networks#verify-the-deployment):
+After `azd up` completes, walk these seven checks. Set the shell vars once:
 
 ```bash
 RG=rg-fun-byo-dev
-PREFIX=funbyodev
-
-# 1. Confirm subnet delegation
-az network vnet subnet show \
-  -g $RG -n snet-${PREFIX}-agent --vnet-name vnet-${PREFIX} \
-  --query "delegations[].serviceName" -o tsv
-# Expected: Microsoft.App/environments
-
-# 2. Confirm publicNetworkAccess is Disabled on all four data resources
-az cognitiveservices account show -n ais-${PREFIX}     -g $RG --query properties.publicNetworkAccess -o tsv
-az search service show           -n srch-${PREFIX}     -g $RG --query publicNetworkAccess           -o tsv
-az cosmosdb show                 -n cosmos-${PREFIX}   -g $RG --query publicNetworkAccess           -o tsv
-az storage account show          -n st${PREFIX}        -g $RG --query publicNetworkAccess           -o tsv
-# All four should print: Disabled
-
-# 3. From the jumpbox, validate DNS resolves to private IPs (RDP via Bastion first)
-nslookup ais-${PREFIX}.cognitiveservices.azure.com   # should return 10.0.1.x
-nslookup srch-${PREFIX}.search.windows.net           # should return 10.0.1.x
-nslookup cosmos-${PREFIX}.documents.azure.com        # should return 10.0.1.x
-nslookup st${PREFIX}.blob.core.windows.net           # should return 10.0.1.x
-
-# 4. Open the Foundry project in the portal (from jumpbox) and create a test agent
+PREFIX=funbyodev                    # confirm with: azd env get-values | grep PREFIX
+ACCT=ais-$PREFIX
+PROJ=$(az cognitiveservices account project list -n $ACCT -g $RG --query "[0].name" -o tsv)
+SUB=$(az account show --query id -o tsv)
 ```
+
+**1. Provisioning succeeded**
+
+```bash
+az group show -n $RG --query "properties.provisioningState" -o tsv    # → Succeeded
+azd env get-values | grep -E 'AI_FOUNDRY|AI_SEARCH|JUMPBOX|BASTION|VNET_ID|AGENT_SUBNET_ID'
+```
+
+**2. Agent subnet is delegated** *(BYO-specific — this is what makes it BYO)*
+
+```bash
+az network vnet subnet show -g $RG -n snet-$PREFIX-agent --vnet-name vnet-$PREFIX \
+  --query "delegations[].serviceName" -o tsv
+# → Microsoft.App/environments
+```
+
+**3. Public network is OFF on all 4 data resources**
+
+```bash
+az cognitiveservices account show -n ais-$PREFIX   -g $RG --query properties.publicNetworkAccess -o tsv
+az search service show           -n srch-$PREFIX   -g $RG --query publicNetworkAccess           -o tsv
+az cosmosdb show                 -n cosmos-$PREFIX -g $RG --query publicNetworkAccess           -o tsv
+az storage account show          -n st$PREFIX      -g $RG --query publicNetworkAccess           -o tsv
+# All four → Disabled  (Enabled is also OK only if you set ALLOWED_IP_ADDRESS for first-deploy access)
+```
+
+**4. CapabilityHost is bound to all 3 connections**
+
+```bash
+az rest --method get --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$ACCT/projects/$PROJ/capabilityHosts?api-version=2025-10-01-preview" \
+  --query "value[0].properties.{thread:threadStorageConnections, storage:storageConnections, vector:vectorStoreConnections}" -o json
+# Expect each array to have exactly 1 entry. Empty arrays = capabilityHost failed to bind.
+```
+
+**5. The 3 project connections all use Entra ID (AAD)**
+
+```bash
+az rest --method get --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$ACCT/projects/$PROJ/connections?api-version=2025-10-01-preview" \
+  --query "value[].{name:name, category:properties.category, auth:properties.authType}" -o table
+# All three rows → authType: AAD
+```
+
+**6. From the jumpbox — DNS resolves to private IPs**
+
+RDP to `vm-$PREFIX` via Bastion (`bas-$PREFIX`), then in PowerShell:
+
+```powershell
+nslookup ais-$env:PREFIX.cognitiveservices.azure.com    # → 10.0.1.x  (PE subnet)
+nslookup srch-$env:PREFIX.search.windows.net            # → 10.0.1.x
+nslookup cosmos-$env:PREFIX.documents.azure.com         # → 10.0.1.x
+nslookup st$env:PREFIX.blob.core.windows.net            # → 10.0.1.x
+```
+
+A public IP back means the matching `privatelink.*` DNS zone isn't linked to your VNet — check `modules/private-endpoints.bicep` outputs.
+
+**7. End-to-end agent smoke test (the one that actually proves it)**
+
+Still on the jumpbox, open `https://ai.azure.com` → your project → **Agents → New agent**:
+
+1. Model: `gpt-4.1-mini` (or whichever deployment was created)
+2. Add tool: **Azure AI Search** → connection auto-selected → index = `documents-index`
+3. Prompt: *"Summarize the February 15 board meeting decisions."*
+
+✅ **Grounded answer** = full BYO-VNet path works: Agent compute (your delegated `snet-$PREFIX-agent`) → Data Proxy (same subnet) → AI Search PE (your `snet-$PREFIX-pe`) → results. Zero traffic over the public internet at any hop.
+
+❌ **"Invalid endpoint or connection failed."** = capabilityHost or connection auth — see [Troubleshooting](#troubleshooting) below.
 
 ## Hosted vs Prompt agents
 
