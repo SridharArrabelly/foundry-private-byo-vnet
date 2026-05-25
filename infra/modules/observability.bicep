@@ -81,6 +81,7 @@ resource ampls 'Microsoft.Insights/privateLinkScopes@2023-06-01-preview' = {
 resource amplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@2023-06-01-preview' = {
   parent: ampls
   name: 'law-scope'
+  kind: 'Resource'
   properties: {
     linkedResourceId: law.id
   }
@@ -89,6 +90,7 @@ resource amplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@20
 resource amplsScopedAi 'Microsoft.Insights/privateLinkScopes/scopedResources@2023-06-01-preview' = {
   parent: ampls
   name: 'appinsights-scope'
+  kind: 'Resource'
   properties: {
     linkedResourceId: appInsights.id
   }

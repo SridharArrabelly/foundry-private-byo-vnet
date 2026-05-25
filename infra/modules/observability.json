@@ -1,0 +1,296 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.43.8.12551",
+      "templateHash": "8537222763402099594"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region for deployment"
+      }
+    },
+    "prefix": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource name prefix"
+      }
+    },
+    "peSubnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Subnet ID for private endpoints"
+      }
+    },
+    "vnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "VNet ID for DNS zone links"
+      }
+    },
+    "dnsZoneBlobId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the existing privatelink.blob.* DNS zone (created by private-endpoints.bicep)"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('log-{0}', parameters('prefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30,
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        },
+        "publicNetworkAccessForIngestion": "Disabled",
+        "publicNetworkAccessForQuery": "Disabled"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[format('appi-{0}', parameters('prefix'))]",
+      "location": "[parameters('location')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', parameters('prefix')))]",
+        "publicNetworkAccessForIngestion": "Disabled",
+        "publicNetworkAccessForQuery": "Disabled",
+        "IngestionMode": "LogAnalytics"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Insights/privateLinkScopes",
+      "apiVersion": "2023-06-01-preview",
+      "name": "[format('ampls-{0}', parameters('prefix'))]",
+      "location": "global",
+      "properties": {
+        "accessModeSettings": {
+          "ingestionAccessMode": "PrivateOnly",
+          "queryAccessMode": "PrivateOnly"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/privateLinkScopes/scopedResources",
+      "apiVersion": "2023-06-01-preview",
+      "name": "[format('{0}/{1}', format('ampls-{0}', parameters('prefix')), 'law-scope')]",
+      "kind": "Resource",
+      "properties": {
+        "linkedResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', parameters('prefix')))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/privateLinkScopes', format('ampls-{0}', parameters('prefix')))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Insights/privateLinkScopes/scopedResources",
+      "apiVersion": "2023-06-01-preview",
+      "name": "[format('{0}/{1}', format('ampls-{0}', parameters('prefix')), 'appinsights-scope')]",
+      "kind": "Resource",
+      "properties": {
+        "linkedResourceId": "[resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('prefix')))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/privateLinkScopes', format('ampls-{0}', parameters('prefix')))]",
+        "[resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('prefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.monitor.azure.com",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.oms.opinsights.azure.com",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.ods.opinsights.azure.com",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.agentsvc.azure-automation.net",
+      "location": "global"
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.monitor.azure.com', format('link-{0}-monitor', parameters('prefix')))]",
+      "location": "global",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[parameters('vnetId')]"
+        },
+        "registrationEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.monitor.azure.com')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.oms.opinsights.azure.com', format('link-{0}-oms', parameters('prefix')))]",
+      "location": "global",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[parameters('vnetId')]"
+        },
+        "registrationEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.oms.opinsights.azure.com')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.ods.opinsights.azure.com', format('link-{0}-ods', parameters('prefix')))]",
+      "location": "global",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[parameters('vnetId')]"
+        },
+        "registrationEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.ods.opinsights.azure.com')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.agentsvc.azure-automation.net', format('link-{0}-agentsvc', parameters('prefix')))]",
+      "location": "global",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[parameters('vnetId')]"
+        },
+        "registrationEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.agentsvc.azure-automation.net')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2024-07-01",
+      "name": "[format('pep-{0}-ampls', parameters('prefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "subnet": {
+          "id": "[parameters('peSubnetId')]"
+        },
+        "privateLinkServiceConnections": [
+          {
+            "name": "[format('plsc-{0}-ampls', parameters('prefix'))]",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Insights/privateLinkScopes', format('ampls-{0}', parameters('prefix')))]",
+              "groupIds": [
+                "azuremonitor"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/privateLinkScopes', format('ampls-{0}', parameters('prefix')))]",
+        "[resourceId('Microsoft.Insights/privateLinkScopes/scopedResources', format('ampls-{0}', parameters('prefix')), 'appinsights-scope')]",
+        "[resourceId('Microsoft.Insights/privateLinkScopes/scopedResources', format('ampls-{0}', parameters('prefix')), 'law-scope')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+      "apiVersion": "2024-07-01",
+      "name": "[format('{0}/{1}', format('pep-{0}-ampls', parameters('prefix')), 'default')]",
+      "properties": {
+        "privateDnsZoneConfigs": [
+          {
+            "name": "config-monitor",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.monitor.azure.com')]"
+            }
+          },
+          {
+            "name": "config-oms",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.oms.opinsights.azure.com')]"
+            }
+          },
+          {
+            "name": "config-ods",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.ods.opinsights.azure.com')]"
+            }
+          },
+          {
+            "name": "config-agentsvc",
+            "properties": {
+              "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.agentsvc.azure-automation.net')]"
+            }
+          },
+          {
+            "name": "config-blob",
+            "properties": {
+              "privateDnsZoneId": "[parameters('dnsZoneBlobId')]"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.agentsvc.azure-automation.net')]",
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.monitor.azure.com')]",
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.ods.opinsights.azure.com')]",
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.oms.opinsights.azure.com')]",
+        "[resourceId('Microsoft.Network/privateEndpoints', format('pep-{0}-ampls', parameters('prefix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-{0}', parameters('prefix')))]"
+    },
+    "appInsightsId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('prefix')))]"
+    },
+    "appInsightsName": {
+      "type": "string",
+      "value": "[format('appi-{0}', parameters('prefix'))]"
+    },
+    "appInsightsConnectionString": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('prefix'))), '2020-02-02').ConnectionString]"
+    },
+    "amplsId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/privateLinkScopes', format('ampls-{0}', parameters('prefix')))]"
+    }
+  }
+}
