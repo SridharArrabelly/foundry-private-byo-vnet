@@ -66,6 +66,26 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   }
 }
 
+// Foundry File Search tool defaults to text-embedding-ada-002 when no model
+// is specified on the vector store. Deploy it so file uploads work out of
+// the box; otherwise agents fail at query time with a generic 500.
+resource adaEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: aiFoundry
+  name: 'text-embedding-ada-002'
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 30
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-ada-002'
+      version: '2'
+    }
+  }
+  dependsOn: [embeddingDeployment]
+}
+
 resource gpt4MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: aiFoundry
   name: 'gpt-4.1-mini'
@@ -80,7 +100,7 @@ resource gpt4MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
       version: '2025-04-14'
     }
   }
-  dependsOn: [embeddingDeployment]
+  dependsOn: [adaEmbeddingDeployment]
 }
 
 // --- Project ---
@@ -95,6 +115,7 @@ resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-10-0
   properties: {}
   dependsOn: [
     embeddingDeployment
+    adaEmbeddingDeployment
     gpt4MiniDeployment
   ]
 }
