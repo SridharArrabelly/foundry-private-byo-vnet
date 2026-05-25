@@ -67,7 +67,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // --- Azure Monitor Private Link Scope ---
 
-resource ampls 'Microsoft.Insights/privateLinkScopes@2023-06-01-preview' = {
+resource ampls 'Microsoft.Insights/privateLinkScopes@2021-07-01-preview' = {
   name: 'ampls-${prefix}'
   location: 'global'
   properties: {
@@ -78,19 +78,17 @@ resource ampls 'Microsoft.Insights/privateLinkScopes@2023-06-01-preview' = {
   }
 }
 
-resource amplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@2023-06-01-preview' = {
+resource amplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   parent: ampls
   name: 'law-scope'
-  kind: 'resource'
   properties: {
     linkedResourceId: law.id
   }
 }
 
-resource amplsScopedAi 'Microsoft.Insights/privateLinkScopes/scopedResources@2023-06-01-preview' = {
+resource amplsScopedAi 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   parent: ampls
   name: 'appinsights-scope'
-  kind: 'resource'
   properties: {
     linkedResourceId: appInsights.id
   }
