@@ -240,3 +240,7 @@ resource dnsGroupBlob 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2
     ]
   }
 }
+
+// Exposed so the observability module can reuse the blob zone in the AMPLS
+// DNS zone group (AMPLS PE needs blob alongside the 4 monitor zones).
+output dnsZoneBlobId string = dnsZoneBlob.id

@@ -89,6 +89,8 @@ Per the [deep-dive](https://learn.microsoft.com/azure/foundry/agents/concepts/ag
 | **Storage account** | `publicNetworkAccess: Disabled`, BYO trio's file/agent-dir storage |
 | **6 Private DNS zones** | Foundry needs `cognitiveservices`, `openai`, `services.ai`. Plus `search`, `documents` (Cosmos), `blob` |
 | **4 Private endpoints** | One each for Foundry, Search, Cosmos, Storage — all in your PE subnet |
+| **Observability** | Log Analytics + Application Insights (workspace-based) wired into the project as an `appinsights` connection so the Foundry agent runtime emits `invoke_agent` / `execute_tool` traces automatically |
+| **Azure Monitor Private Link Scope (AMPLS)** | `PrivateOnly` ingestion + query, with a 5th PE (`groupId: azuremonitor`) and 4 extra DNS zones (`monitor`, `oms`, `ods`, `agentsvc`). Reuses the existing `blob` zone. |
 | **`capabilityHost`** | The non-optional resource that binds the three BYO connections to the agent runtime |
 | **Two-phase RBAC** | Pre-caphost (project MI → BYO resources) + post-caphost (Storage Blob Data Owner with ABAC + Cosmos SQL data role) |
 | **Jumpbox VM** | Windows + System MI; used for indexer + Bastion-based portal access |
@@ -250,12 +252,14 @@ az rest --method get --url "https://management.azure.com/subscriptions/$SUB/reso
 # Expect each array to have exactly 1 entry. Empty arrays = capabilityHost failed to bind.
 ```
 
-**5. The 3 project connections all use Entra ID (AAD)**
+**5. The project connections all use Entra ID (AAD), plus an AppInsights connection**
 
 ```bash
 az rest --method get --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$ACCT/projects/$PROJ/connections?api-version=2025-10-01-preview" \
   --query "value[].{name:name, category:properties.category, auth:properties.authType}" -o table
-# All three rows → authType: AAD
+# Expect 4 rows: Cosmos, Storage, Search (all AAD) + appinsights (ApiKey).
+# The appinsights connection makes the agent runtime publish traces to your
+# private App Insights without a manual Foundry UI step.
 ```
 
 **6. From the jumpbox — DNS resolves to private IPs**
@@ -270,6 +274,31 @@ nslookup st$env:PREFIX.blob.core.windows.net            # → 10.0.1.x
 ```
 
 A public IP back means the matching `privatelink.*` DNS zone isn't linked to your VNet — check `modules/private-endpoints.bicep` outputs.
+
+**6b. Observability is fully private and receiving traces**
+
+```bash
+# Log Analytics + App Insights have publicNetworkAccess=Disabled and AMPLS is PrivateOnly.
+az monitor app-insights component show -g $RG --app appi-$PREFIX --query "{ingest:publicNetworkAccessForIngestion, query:publicNetworkAccessForQuery}" -o table
+az monitor log-analytics workspace show -g $RG --workspace-name log-$PREFIX --query "{ingest:publicNetworkAccessForIngestion, query:publicNetworkAccessForQuery}" -o table
+az resource show -g $RG -n ampls-$PREFIX --resource-type Microsoft.Insights/privateLinkScopes --query "properties.accessModeSettings" -o json
+# Both should report Disabled / Disabled; AMPLS access modes both PrivateOnly.
+```
+
+From the jumpbox PowerShell:
+```powershell
+nslookup api.monitor.azure.com               # → 10.0.1.x  (AMPLS PE)
+nslookup <region>.in.applicationinsights.azure.com   # also via AMPLS
+```
+
+Then in the Foundry portal → your agent → **Traces** tab, run the agent once and confirm the `invoke_agent` and `execute_tool` rows appear. If they don't, query App Insights Logs directly:
+```kusto
+dependencies
+| where timestamp > ago(15m)
+| where cloud_RoleName == "responsesapi"
+| project timestamp, name, target, resultCode, success, duration
+| order by timestamp desc
+```
 
 **7. End-to-end agent smoke test (the one that actually proves it)**
 

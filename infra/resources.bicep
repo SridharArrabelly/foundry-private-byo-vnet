@@ -93,7 +93,27 @@ module privateEndpoints 'modules/private-endpoints.bicep' = {
 }
 
 // =====================================================================
+// 4b. Observability — Log Analytics + Application Insights + AMPLS PE.
+//     Created BEFORE the project so the project AppInsights connection
+//     can reference it. Lives behind a private endpoint (groupId:
+//     azuremonitor) and ingestion/query are PrivateOnly.
+// =====================================================================
+
+module observability 'modules/observability.bicep' = {
+  name: 'deploy-observability'
+  params: {
+    location: location
+    prefix: prefix
+    peSubnetId: network.outputs.peSubnetId
+    vnetId: network.outputs.vnetId
+    dnsZoneBlobId: privateEndpoints.outputs.dnsZoneBlobId
+  }
+}
+
+// =====================================================================
 // 5. Foundry project + model deployments + BYO project connections
+//    Includes the App Insights connection so the agent runtime publishes
+//    telemetry to your private observability stack out of the box.
 // =====================================================================
 
 module foundryProject 'modules/ai-foundry-project.bicep' = {
@@ -113,6 +133,8 @@ module foundryProject 'modules/ai-foundry-project.bicep' = {
     storageId: storage.outputs.storageId
     storageLocation: location
     storageBlobEndpoint: storage.outputs.storageBlobEndpoint
+    appInsightsId: observability.outputs.appInsightsId
+    appInsightsConnectionString: observability.outputs.appInsightsConnectionString
   }
   dependsOn: [
     privateEndpoints
@@ -220,3 +242,7 @@ output cosmosName string = cosmos.outputs.cosmosName
 output storageName string = storage.outputs.storageName
 output jumpboxVmName string = jumpbox.outputs.vmName
 output bastionName string = jumpbox.outputs.bastionName
+output appInsightsName string = observability.outputs.appInsightsName
+output appInsightsId string = observability.outputs.appInsightsId
+output logAnalyticsWorkspaceId string = observability.outputs.logAnalyticsWorkspaceId
+output amplsId string = observability.outputs.amplsId

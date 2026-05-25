@@ -43,6 +43,13 @@ param storageLocation string
 @description('Blob endpoint of the Storage account')
 param storageBlobEndpoint string
 
+@description('Resource ID of the Application Insights component (optional). When set, a project AppInsights connection is created so the Foundry agent runtime publishes telemetry to it.')
+param appInsightsId string = ''
+
+@description('Application Insights connection string (optional, required when appInsightsId is set).')
+@secure()
+param appInsightsConnectionString string = ''
+
 resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' existing = {
   name: accountName
 }
@@ -172,6 +179,28 @@ resource projectSearchConnection 'Microsoft.CognitiveServices/accounts/projects/
     }
   }
   dependsOn: [projectStorageConnection]
+}
+
+// --- Optional Application Insights connection ---
+// Wires the project to your App Insights so the Foundry agent runtime emits
+// invoke_agent / execute_tool dependencies and exceptions automatically.
+
+resource projectAppInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = if (!empty(appInsightsId)) {
+  parent: foundryProject
+  name: 'appinsights'
+  properties: {
+    category: 'AppInsights'
+    target: appInsightsId
+    authType: 'ApiKey'
+    credentials: {
+      key: appInsightsConnectionString
+    }
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: appInsightsId
+    }
+  }
+  dependsOn: [projectSearchConnection]
 }
 
 output projectName string = foundryProject.name

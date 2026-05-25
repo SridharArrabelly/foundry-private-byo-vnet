@@ -54,3 +54,7 @@ output JUMPBOX_VM_NAME string = resources.outputs.jumpboxVmName
 output BASTION_NAME string = resources.outputs.bastionName
 output VNET_ID string = resources.outputs.vnetId
 output AGENT_SUBNET_ID string = resources.outputs.agentSubnetId
+output APPLICATIONINSIGHTS_NAME string = resources.outputs.appInsightsName
+output APPLICATIONINSIGHTS_ID string = resources.outputs.appInsightsId
+output LOG_ANALYTICS_WORKSPACE_ID string = resources.outputs.logAnalyticsWorkspaceId
+output AZURE_MONITOR_PRIVATE_LINK_SCOPE_ID string = resources.outputs.amplsId
