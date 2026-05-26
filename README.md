@@ -94,27 +94,33 @@ Subnet planning matters in this model. Rules of thumb:
 
 ## Validate the deployment
 
-After deployment, validate the following:
+After `azd up` completes, run the **[7 copy-paste CLI checks](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md#cli-verification--7-concrete-checks)** to prove the full chain works end-to-end:
 
-- You can reach the Foundry experience through the intended private access path
-- The agent can call AI Search
-- Thread state is written to Cosmos DB
-- File operations land in Storage
-- Traffic is visible in the customer network boundary where expected
-- Private endpoints, DNS, and RBAC are all functioning end-to-end
+1. provisioning state → 2. public network OFF on all 4 data resources → 3. capabilityHost bound to all 3 connections → 4. connections use `authType: AAD` → 5. DNS resolves to private IPs from jumpbox → 6. agent smoke test returns `completed`
 
-For a full checklist, see the [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md).
+BYO-specific things also worth confirming:
 
-## Known caveats
+- The agent runtime's NIC appears in your **delegated subnet** (`az network nic list -g <rg> --query "[?contains(name, 'agent')].ipConfigurations[].privateIPAddress"`)
+- Outbound agent traffic is visible in your **NSG flow logs** (if enabled) — that is the whole reason you picked BYO over Managed VNet
+- Delegated subnet has free IP capacity for future scale (see [Capacity and subnet sizing](#capacity-and-subnet-sizing) above)
 
-Before using this as a production baseline, confirm:
+## Troubleshooting
 
-- Region support for your exact scenario
-- Feature support for the agent capabilities you plan to use
-- Delegated subnet sizing and network policy alignment
-- Validation of the network-injection path in your target environment
+The single most common silent failure — same as Managed VNet — is an agent run that returns:
 
-See [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md) for the full list.
+```
+Invalid endpoint or connection failed
+```
+
+That almost always means `capabilityHost` is missing or unbound. Start with [Design rationale → What happens if you skip capabilityHost](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/design-rationale.md#what-happens-if-you-skip-capabilityhost), then run [validation check #4](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md#check-4--capabilityhost-is-bound-to-all-3-connections).
+
+BYO-specific failure modes:
+
+- **Agent provisioning hangs or fails with subnet errors** — the delegated subnet is full, mis-delegated, or has an NSG that blocks `Microsoft.Cognitive Services`. Check `az network vnet subnet show -g <rg> --vnet-name <vnet> -n <delegated-subnet>` for `delegations` and free IP count.
+- **DNS resolves to public IPs from inside the VNet** — your VNet is not linked to one of the 6 `privatelink.*` zones. See the [DNS zones table](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/capabilityhost-rbac-dns.md#private-dns-zones).
+- **Traffic does not appear in NSG flow logs** — flow logs are not enabled on the delegated subnet's NSG, or the agent traffic is taking a different egress path than expected.
+
+For deployment-time errors (`azd down` SDK bug, `CustomDomainInUse`, region capacity), see [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md). For the full troubleshooting decision tree, see [Troubleshooting order](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/capabilityhost-rbac-dns.md#troubleshooting-order).
 
 ## Related docs
 
