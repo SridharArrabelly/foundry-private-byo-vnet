@@ -12,7 +12,7 @@ Choose this sample when you need:
 
 - Agent IPs inside the customer VNet
 - Customer-visible flows in NSG or firewall logs
-- Hosted agents or Prompt agents
+- Customer ownership of the agent runtime network path (for downstream allow-listing or auditing)
 - Explicit IP-aware integration with downstream systems
 - A design aligned to stricter regulatory or network-control requirements
 
@@ -110,7 +110,7 @@ For a full checklist, see the [Validation checklist](https://github.com/SridharA
 Before using this as a production baseline, confirm:
 
 - Region support for your exact scenario
-- Feature support for the agent type you plan to use
+- Feature support for the agent capabilities you plan to use
 - Delegated subnet sizing and network policy alignment
 - Validation of the network-injection path in your target environment
 
