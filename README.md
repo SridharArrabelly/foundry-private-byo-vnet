@@ -28,7 +28,7 @@ Compared with Managed VNet, this sample adds or changes the following:
 - Operational complexity is higher
 - Traffic visibility is higher because it lives in the customer network boundary
 
-For a full visual comparison, see the [Side-by-side architecture comparison](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/architecture-diagrams/side-by-side.md).
+For a full visual comparison, see the [Side-by-side architecture comparison](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/side-by-side.md).
 
 ## What this repo deploys
 
@@ -46,8 +46,8 @@ For a full visual comparison, see the [Side-by-side architecture comparison](htt
 
 See the detailed architecture walkthrough here:
 
-- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/architecture-diagrams/byo-vnet.md)
-- [Side-by-side comparison with Managed VNet](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/architecture-diagrams/side-by-side.md)
+- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/byo-vnet.md)
+- [Side-by-side comparison with Managed VNet](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/side-by-side.md)
 
 At a high level:
 
@@ -103,7 +103,7 @@ After deployment, validate the following:
 - Traffic is visible in the customer network boundary where expected
 - Private endpoints, DNS, and RBAC are all functioning end-to-end
 
-For a full checklist, see the [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/validation-checklist.md).
+For a full checklist, see the [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md).
 
 ## Known caveats
 
@@ -114,23 +114,16 @@ Before using this as a production baseline, confirm:
 - Delegated subnet sizing and network policy alignment
 - Validation of the network-injection path in your target environment
 
-See [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/known-limitations.md) for the full list.
+See [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md) for the full list.
 
 ## Related docs
 
 - [Compare with Managed VNet](https://github.com/SridharArrabelly/foundry-private-managed-vnet)
 - [Decision hub](https://github.com/SridharArrabelly/foundry-private-networking-samples)
-- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/architecture-diagrams/byo-vnet.md)
-- [Side-by-side architecture comparison](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/architecture-diagrams/side-by-side.md)
-- [Shared data plane](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/shared-data-plane.md)
-- [capabilityHost, RBAC, and DNS](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/capabilityhost-rbac-dns.md)
-- [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/validation-checklist.md)
-- [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/docs/lean-readme/docs/known-limitations.md)
-
-## Why this repo exists
-
-This repo is designed for scenarios where private access alone is not enough and the customer also needs control and visibility over the agent network path. Use it to:
-
-- Validate a delegated-subnet design with Foundry Agents
-- Show the trade-off between simplicity and network control
-- Give regulated customers a reference starting point they can evolve further
+- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/byo-vnet.md)
+- [Side-by-side architecture comparison](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/side-by-side.md)
+- [Design rationale](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/design-rationale.md) — why the BYO triple is required, what happens if you skip `capabilityHost`, and why BYO collapses the dual-PE pattern
+- [Shared data plane](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/shared-data-plane.md)
+- [capabilityHost, RBAC, and DNS](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/capabilityhost-rbac-dns.md)
+- [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md) — 7 copy-paste CLI checks
+- [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md)
