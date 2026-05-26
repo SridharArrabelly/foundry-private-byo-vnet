@@ -1,7 +1,7 @@
 """
 setup_aisearch_index.py
 
-Creates an AI Search index, reads .docx files from the data/ folder,
+Creates an AI Search index, reads .docx and .pdf files from the data/ folder,
 chunks the content, generates embeddings via Azure OpenAI (text-embedding-3-large),
 and uploads the chunks to the AI Search index.
 
@@ -16,6 +16,7 @@ import glob
 from pathlib import Path
 from dotenv import load_dotenv
 from docx import Document
+from pypdf import PdfReader
 from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
@@ -61,6 +62,23 @@ def extract_text_from_docx(file_path: str) -> str:
     """Extract all text from a .docx file."""
     doc = Document(file_path)
     return "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+
+
+def extract_text_from_pdf(file_path: str) -> str:
+    """Extract all text from a .pdf file."""
+    reader = PdfReader(file_path)
+    pages = [page.extract_text() or "" for page in reader.pages]
+    return "\n".join(p for p in pages if p.strip())
+
+
+def extract_text(file_path: str) -> str:
+    """Dispatch to the right extractor based on file extension."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".docx":
+        return extract_text_from_docx(file_path)
+    if ext == ".pdf":
+        return extract_text_from_pdf(file_path)
+    raise ValueError(f"Unsupported file type: {ext}")
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -111,23 +129,26 @@ def generate_embeddings(openai_client: AzureOpenAI, texts: list[str]) -> list[li
 
 
 def index_documents(search_client: SearchClient, openai_client: AzureOpenAI):
-    """Read docx files, chunk, embed, and upload to search index."""
-    docx_files = glob.glob(os.path.join(DATA_FOLDER, "*.docx"))
+    """Read supported files (.docx, .pdf), chunk, embed, and upload to search index."""
+    source_files = sorted(
+        glob.glob(os.path.join(DATA_FOLDER, "*.docx"))
+        + glob.glob(os.path.join(DATA_FOLDER, "*.pdf"))
+    )
 
-    if not docx_files:
-        print(f"No .docx files found in {DATA_FOLDER}")
+    if not source_files:
+        print(f"No .docx or .pdf files found in {DATA_FOLDER}")
         sys.exit(1)
 
-    print(f"Found {len(docx_files)} .docx file(s) to index.")
+    print(f"Found {len(source_files)} file(s) to index.")
 
     all_documents = []
     doc_id = 0
 
-    for file_path in docx_files:
+    for file_path in source_files:
         filename = os.path.basename(file_path)
         print(f"  Processing: {filename}")
 
-        text = extract_text_from_docx(file_path)
+        text = extract_text(file_path)
         chunks = chunk_text(text)
         print(f"    → {len(chunks)} chunks")
 
