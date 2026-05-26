@@ -199,7 +199,7 @@ def main():
     # Step 2: Chunk docs and upload with embeddings
     index_documents(search_client, openai_client)
 
-    print(f"\n✅ Done! Index '{INDEX_NAME}' is ready with {INDEX_NAME} chunks indexed.")
+    print(f"\n✅ Done! Index '{INDEX_NAME}' is ready.")
 
 
 if __name__ == "__main__":
