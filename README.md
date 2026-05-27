@@ -110,34 +110,52 @@ Subnet planning matters in this model. Rules of thumb:
 
 After `azd up` completes, run the **[copy-paste CLI checks](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md#cli-verification--7-concrete-checks)** to prove the full chain works end-to-end. For BYO VNet, **6 of the 7 checks apply** — Check 3 (`networkInjections` for the managed VNet) is informational only since BYO uses subnet injection instead.
 
+Checks 1–6 run from your dev box (`az` CLI + `nslookup` from a Bastion session). **Check 7** is a Python smoke test that runs from the jumpbox — to use it you need Python + the project's dependencies on the jumpbox, which is what `scripts/bootstrap-jumpbox.{ps1,sh}` sets up (see [Optional: populate sample data + bootstrap the jumpbox](#optional-populate-sample-data--bootstrap-the-jumpbox) below).
+
 BYO-specific things also worth confirming:
 
 - The agent runtime's NIC appears in your **delegated subnet** (`az network nic list -g <rg> --query "[?contains(name, 'agent')].ipConfigurations[].privateIPAddress"`)
 - Outbound agent traffic is visible in your **NSG flow logs** (if enabled) — that is the whole reason you picked BYO over Managed VNet
 - Delegated subnet has free IP capacity for future scale (see [Capacity and subnet sizing](#capacity-and-subnet-sizing) above)
 
-## Sample data and the test index
+## Optional: populate sample data + bootstrap the jumpbox
 
-The `data/` folder ships with `sample_document.pdf` as a generic placeholder corpus, used purely to prove the private **AI Search** path works end-to-end. During `azd up`, the postprovision hook runs `scripts/setup_aisearch_index.py` on the jumpbox, which:
+> `azd up` provisions infrastructure only. It does **not** install Python on the jumpbox or index any sample data. Run this step **only** if you want the AI Search smoke test (validation Check 7) or File Search to have data to query. Most real customers will skip this and bring their own data + their own indexer.
 
-- Creates an AI Search index named `documents-index` (override with the `AI_SEARCH_INDEX_NAME` env var)
-- Reads every `.docx` and `.pdf` file under `data/`, chunks the content, generates embeddings via Azure OpenAI, and uploads them
+The repo ships `data/sample_document.pdf` as a generic test corpus, and `scripts/bootstrap-jumpbox.{ps1,sh}` automates one-time setup of the jumpbox.
 
-To test with your own corpus, drop your `.docx` / `.pdf` files into `data/` and re-run either:
+### What it does
+
+Run from your dev box, against the active `azd` environment. It:
+
+1. Reads `AZURE_RESOURCE_GROUP`, `JUMPBOX_VM_NAME`, `AI_SEARCH_ENDPOINT`, `AI_FOUNDRY_ENDPOINT` from `azd env get-values`
+2. Calls `az vm run-command invoke` to push `scripts/jumpbox-bootstrap.ps1` to the jumpbox over the Azure backplane (no Bastion / RDP required)
+3. The jumpbox-side script installs Python 3.12, downloads the repo zip, runs `scripts/setup_aisearch_index.py` (auth via the VM's system-assigned managed identity), and uploads embeddings for every `.pdf` / `.docx` under `data/`
+
+### Run it
 
 ```bash
-azd provision    # re-runs the full postprovision hook
-# or, from the jumpbox directly:
-python scripts/setup_aisearch_index.py
+./scripts/bootstrap-jumpbox.sh      # macOS / Linux / WSL
+./scripts/bootstrap-jumpbox.ps1     # Windows PowerShell
 ```
 
-Once testing is done, you have two options — neither affects the rest of the infrastructure:
+Takes ~5–10 minutes on first run. Re-running it is safe — Python install is skipped if already present, and the index is upserted.
 
-- **Delete the sample index** when you no longer need it:
-  ```bash
-  az search index delete --service-name <ai-search-name> --name documents-index -y
-  ```
-- **Point the agent at your own existing AI Search index** instead — set `AI_SEARCH_INDEX_NAME` in your `.env` to your index name before `azd provision`, and skip the sample indexer by emptying `data/`.
+### Use your own corpus
+
+Drop `.pdf` / `.docx` files into `data/`, then re-run `bootstrap-jumpbox`. Override the index name with `AI_SEARCH_INDEX_NAME` before running if you want a non-default name.
+
+### Point the agent at an existing index instead
+
+If you already have an AI Search index you want to use, **skip this step entirely**. Set `AI_SEARCH_INDEX_NAME` to your index name when wiring up your agent — the infrastructure deployment does not assume `documents-index` exists.
+
+### Clean up the sample index
+
+```bash
+az search index delete --service-name <ai-search-name> --name documents-index -y
+```
+
+Doesn't affect the rest of the infrastructure.
 
 ## Troubleshooting
 
