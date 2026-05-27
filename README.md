@@ -74,8 +74,22 @@ At a high level:
 git clone https://github.com/SridharArrabelly/foundry-private-byo-vnet.git
 cd foundry-private-byo-vnet
 azd auth login
+
+# Required: set the jumpbox local-admin password before `azd up` (12+ chars, mixed case + digits + symbols).
+# `main.parameters.json` requires this and has no default — `azd up` will fail without it.
+azd env set VM_ADMIN_PASSWORD '<your-strong-password>'
+
+# Optional: pin a short prefix used in resource names (3–10 lowercase letters/digits)
+azd env set PREFIX 'fun'
+
+# Optional: keep one public IP/CIDR reachable (your laptop) while everything else stays private.
+# Leave unset to disable all public exposure.
+azd env set ALLOWED_IP_ADDRESS '<your-public-ip>'
+
 azd up
 ```
+
+You'll be prompted for `AZURE_ENV_NAME` and `AZURE_LOCATION` on first run. The samples are validated in `swedencentral`; other regions may require Foundry / capabilityHost preview availability checks.
 
 ### Tear down
 
