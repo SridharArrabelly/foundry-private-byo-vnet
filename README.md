@@ -108,9 +108,7 @@ Subnet planning matters in this model. Rules of thumb:
 
 ## Validate the deployment
 
-After `azd up` completes, run the **[7 copy-paste CLI checks](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md#cli-verification--7-concrete-checks)** to prove the full chain works end-to-end:
-
-1. provisioning state → 2. public network OFF on all 4 data resources → 3. capabilityHost bound to all 3 connections → 4. connections use `authType: AAD` → 5. DNS resolves to private IPs from jumpbox → 6. agent smoke test returns `completed`
+After `azd up` completes, run the **[copy-paste CLI checks](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md#cli-verification--7-concrete-checks)** to prove the full chain works end-to-end. For BYO VNet, **6 of the 7 checks apply** — Check 3 (`networkInjections` for the managed VNet) is informational only since BYO uses subnet injection instead.
 
 BYO-specific things also worth confirming:
 
@@ -161,12 +159,7 @@ For deployment-time errors (`azd down` SDK bug, `CustomDomainInUse`, region capa
 
 ## Related docs
 
-- [Compare with Managed VNet](https://github.com/SridharArrabelly/foundry-private-managed-vnet)
-- [Decision hub](https://github.com/SridharArrabelly/foundry-private-networking-samples)
-- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/byo-vnet.md)
+- [Decision hub (parent)](https://github.com/SridharArrabelly/foundry-private-networking-samples) — when to pick BYO vs Managed VNet
+- [Compare with Managed VNet](https://github.com/SridharArrabelly/foundry-private-managed-vnet) — the other sample in this family
+- [BYO VNet architecture](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/byo-vnet.md) — diagram + component walkthrough
 - [Side-by-side architecture comparison](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/architecture-diagrams/side-by-side.md)
-- [Design rationale](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/design-rationale.md) — why the BYO triple is required, what happens if you skip `capabilityHost`, and why BYO collapses the dual-PE pattern
-- [Shared data plane](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/shared-data-plane.md)
-- [capabilityHost, RBAC, and DNS](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/capabilityhost-rbac-dns.md)
-- [Validation checklist](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md) — 7 copy-paste CLI checks
-- [Known limitations](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md)
