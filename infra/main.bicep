@@ -47,6 +47,7 @@ module resources 'resources.bicep' = {
 output AZURE_LOCATION string = location
 output AZURE_RESOURCE_GROUP string = rg.name
 output AI_FOUNDRY_NAME string = resources.outputs.aiFoundryName
+output AI_FOUNDRY_PROJECT_NAME string = resources.outputs.aiFoundryProjectName
 output AI_FOUNDRY_ENDPOINT string = resources.outputs.aiFoundryEndpoint
 output AI_SEARCH_NAME string = resources.outputs.aiSearchName
 output AI_SEARCH_ENDPOINT string = resources.outputs.aiSearchEndpoint
