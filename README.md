@@ -67,6 +67,15 @@ At a high level:
 - Rights to create resources and assign required roles
 - A target region that supports your chosen Foundry setup
 - A delegated subnet plan for the agent-side network path
+- **VNet address space must be RFC 1918** (`10.0.0.0/8`, `172.16.0.0/12`, or `192.168.0.0/16`). CGNAT (`100.64.0.0/10`) and other Azure-reserved ranges fail at `capabilityHost` create — see [known limitations #10](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/known-limitations.md#10-rfc-1918-only--cgnat-and-reserved-ranges-fail-at-capabilityhost-create).
+- **Resource providers registered:** the agent runtime needs both `Microsoft.App` and `Microsoft.ContainerService` registered on the target subscription before `azd up`. Without them, `capabilityHost` create fails.
+  ```bash
+  az provider register --namespace 'Microsoft.App'
+  az provider register --namespace 'Microsoft.ContainerService'
+  # Wait until both report Registered:
+  az provider show -n 'Microsoft.App' --query registrationState -o tsv
+  az provider show -n 'Microsoft.ContainerService' --query registrationState -o tsv
+  ```
 
 ### Deploy
 
@@ -101,10 +110,11 @@ azd down
 
 Subnet planning matters in this model. Rules of thumb:
 
-- Use `/24` if you want more headroom for growth or higher concurrency
-- Treat `/26` as the practical minimum for smaller scenarios
-- Leave room for revisions, upgrades, and operational churn
-- Validate subnet design early if the environment is tightly controlled
+- **VNet address space must be RFC 1918.** CGNAT (`100.64.0.0/10`) and other Azure-reserved ranges will fail at `capabilityHost` create. See [Prerequisites](#prerequisites).
+- **`/27` (32 addresses) is the floor, not a recommendation.** ACA scale-out on the agent subnet and any future BYO PEs will hit a `/27` ceiling fast.
+- **Plan for `/26` minimum** on net-new deployments; use `/24` if you want real headroom for growth or higher concurrency.
+- Leave room for revisions, upgrades, and operational churn (ACA allocates ~1 IP per 10 pods + 1 per Hosted-agent revision).
+- Validate subnet design early if the environment is tightly controlled.
 
 ## Validate the deployment
 
