@@ -16,6 +16,9 @@ param location string
 @description('Resource name prefix')
 param prefix string
 
+@description('Deploy NAT Gateway on the VM subnet. Only needed when a jumpbox lives in the subnet and needs outbound internet (pip install, GitHub).')
+param deployNatGateway bool = true
+
 var vnetName = 'vnet-${prefix}'
 var peSubnetName = 'snet-${prefix}-pe'
 var vmSubnetName = 'snet-${prefix}-vm'
@@ -23,7 +26,7 @@ var agentSubnetName = 'snet-${prefix}-agent'
 
 // --- NAT Gateway for the VM subnet (default-outbound retirement workaround) ---
 
-resource natPip 'Microsoft.Network/publicIPAddresses@2024-07-01' = {
+resource natPip 'Microsoft.Network/publicIPAddresses@2024-07-01' = if (deployNatGateway) {
   name: 'pip-${prefix}-natgw'
   location: location
   sku: {
@@ -34,7 +37,7 @@ resource natPip 'Microsoft.Network/publicIPAddresses@2024-07-01' = {
   }
 }
 
-resource natGateway 'Microsoft.Network/natGateways@2024-07-01' = {
+resource natGateway 'Microsoft.Network/natGateways@2024-07-01' = if (deployNatGateway) {
   name: 'natgw-${prefix}'
   location: location
   sku: {
@@ -71,9 +74,9 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-07-01' = {
         name: vmSubnetName
         properties: {
           addressPrefix: '10.0.2.0/24'
-          natGateway: {
+          natGateway: deployNatGateway ? {
             id: natGateway.id
-          }
+          } : null
         }
       }
       {

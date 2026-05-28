@@ -15,12 +15,18 @@ param prefix string = toLower(replace(environmentName, '-', ''))
 @description('Your public IP to allow portal/API access (leave empty for fully private)')
 param allowedIpAddress string = ''
 
-@description('Admin username for the jumpbox VM')
+@description('Deploy AMPLS + Log Analytics + Application Insights + monitor private endpoint and DNS zones. Set false if you already have a central observability stack you intend to reuse, or for a faster minimal deployment.')
+param deployObservability bool = true
+
+@description('Deploy the Windows jumpbox VM + Azure Bastion + NAT Gateway. Set false for a faster minimal deployment when you plan to access Foundry from your dev box via allowedIpAddress.')
+param deployJumpbox bool = true
+
+@description('Admin username for the jumpbox VM (ignored when deployJumpbox is false)')
 param vmAdminUsername string = 'azureadmin'
 
 @secure()
-@description('Admin password for the jumpbox VM (12+ chars, upper/lower/number/special)')
-param vmAdminPassword string
+@description('Admin password for the jumpbox VM (12+ chars, upper/lower/number/special). Required when deployJumpbox is true; ignored otherwise.')
+param vmAdminPassword string = ''
 
 var tags = {
   'azd-env-name': environmentName
@@ -39,6 +45,8 @@ module resources 'resources.bicep' = {
     location: location
     prefix: prefix
     allowedIpAddress: allowedIpAddress
+    deployObservability: deployObservability
+    deployJumpbox: deployJumpbox
     vmAdminUsername: vmAdminUsername
     vmAdminPassword: vmAdminPassword
   }

@@ -22,7 +22,7 @@ param searchId string
 @description('Resource ID of the AI Foundry (Cognitive Services) account')
 param aiFoundryId string
 
-@description('Principal ID of the jumpbox VM system-assigned managed identity')
+@description('Principal ID of the jumpbox VM system-assigned managed identity. Pass empty string when no jumpbox is deployed; in that case the jumpbox role assignments are skipped.')
 param jumpboxPrincipalId string
 
 var searchIndexDataContributorRoleId = '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
@@ -64,7 +64,7 @@ resource searchServiceContributorFoundry 'Microsoft.Authorization/roleAssignment
 
 // --- Jumpbox VM MI -> Search (so it can create the index and upload docs) ---
 
-resource searchIndexDataContributorVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource searchIndexDataContributorVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(jumpboxPrincipalId)) {
   name: guid(searchId, jumpboxPrincipalId, searchIndexDataContributorRoleId)
   scope: searchResource
   dependsOn: [
@@ -77,7 +77,7 @@ resource searchIndexDataContributorVm 'Microsoft.Authorization/roleAssignments@2
   }
 }
 
-resource searchServiceContributorVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource searchServiceContributorVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(jumpboxPrincipalId)) {
   name: guid(searchId, jumpboxPrincipalId, searchServiceContributorRoleId)
   scope: searchResource
   dependsOn: [
@@ -92,7 +92,7 @@ resource searchServiceContributorVm 'Microsoft.Authorization/roleAssignments@202
 
 // --- Jumpbox VM MI -> AI Foundry (so it can call embeddings) ---
 
-resource cognitiveOpenAIUserVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource cognitiveOpenAIUserVm 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(jumpboxPrincipalId)) {
   name: guid(aiFoundryId, jumpboxPrincipalId, cognitiveServicesOpenAIUserRoleId)
   scope: aiFoundryResource
   properties: {

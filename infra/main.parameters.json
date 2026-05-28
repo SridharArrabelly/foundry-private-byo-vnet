@@ -14,11 +14,17 @@
     "allowedIpAddress": {
       "value": "${ALLOWED_IP_ADDRESS=}"
     },
+    "deployObservability": {
+      "value": "${DEPLOY_OBSERVABILITY=true}"
+    },
+    "deployJumpbox": {
+      "value": "${DEPLOY_JUMPBOX=true}"
+    },
     "vmAdminUsername": {
       "value": "${VM_ADMIN_USERNAME=azureadmin}"
     },
     "vmAdminPassword": {
-      "value": "${VM_ADMIN_PASSWORD}"
+      "value": "${VM_ADMIN_PASSWORD=}"
     }
   }
 }

@@ -84,8 +84,8 @@ git clone https://github.com/SridharArrabelly/foundry-private-byo-vnet.git
 cd foundry-private-byo-vnet
 azd auth login
 
-# Required: set the jumpbox local-admin password before `azd up` (12+ chars, mixed case + digits + symbols).
-# `main.parameters.json` requires this and has no default — `azd up` will fail without it.
+# Required (default deployment): set the jumpbox local-admin password (12+ chars, mixed case + digits + symbols).
+# Skip this if you're going with the Quick deployment below (DEPLOY_JUMPBOX=false).
 azd env set VM_ADMIN_PASSWORD '<your-strong-password>'
 
 # Optional: pin a short prefix used in resource names (3–10 lowercase letters/digits)
@@ -99,6 +99,25 @@ azd up
 ```
 
 You'll be prompted for `AZURE_ENV_NAME` and `AZURE_LOCATION` on first run. The samples are validated in `swedencentral`; other regions may require Foundry / capabilityHost preview availability checks.
+
+### Quick deployment (skip observability + jumpbox)
+
+Use this for demos / dev environments where you don't need AMPLS and you'll reach Foundry from your dev box. Cuts deploy time from ~25 min to ~12 min and removes ~$220/mo of idle cost.
+
+```bash
+azd env set DEPLOY_OBSERVABILITY false      # skip AMPLS + Log Analytics + App Insights + monitor PE/zones
+azd env set DEPLOY_JUMPBOX       false      # skip jumpbox VM + Bastion + NAT Gateway + their RBAC
+azd env set ALLOWED_IP_ADDRESS   '<your-public-ip>'   # required so you can reach Foundry without the jumpbox
+azd up
+```
+
+When `DEPLOY_JUMPBOX=false`:
+- `VM_ADMIN_PASSWORD` is not required (the VM isn't created).
+- The Foundry account becomes selectively public for `ALLOWED_IP_ADDRESS`; everything else stays private. The agent runtime itself (in the delegated subnet) is **not** affected.
+- Validation Check 6 (private DNS resolution from inside VNet) becomes unverifiable from your dev box — see [validation-checklist.md](https://github.com/SridharArrabelly/foundry-private-networking-samples/blob/master/docs/validation-checklist.md) for the dev-box-only validation flow.
+- `bootstrap-jumpbox` short-circuits gracefully. To populate the sample AI Search index, run `setup_aisearch_index.py` from any machine that can reach AI Search (your dev box, since `ALLOWED_IP_ADDRESS` is set).
+
+Both flags are reversible — flip them back to `true` and run `azd provision` to add observability / the jumpbox to an existing environment.
 
 ### Tear down
 

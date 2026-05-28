@@ -43,6 +43,15 @@ if [[ $missing -eq 1 ]] && command -v azd &>/dev/null; then
     done < <(azd env get-values 2>/dev/null)
 fi
 
+if [[ -z "${JUMPBOX_VM_NAME:-}" ]]; then
+    echo "JUMPBOX_VM_NAME is empty. This usually means DEPLOY_JUMPBOX=false in the active azd env." >&2
+    echo "There is no jumpbox to index against. Either:" >&2
+    echo "  - run 'azd env set DEPLOY_JUMPBOX true' followed by 'azd provision', then re-run this script; or" >&2
+    echo "  - run 'scripts/setup_aisearch_index.py' directly from a machine that can reach AI Search privately" >&2
+    echo "    (after running 'pip install -r scripts/requirements.txt')." >&2
+    exit 0
+fi
+
 : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP not set and could not be loaded from azd}"
 : "${JUMPBOX_VM_NAME:?JUMPBOX_VM_NAME not set and could not be loaded from azd}"
 : "${AI_SEARCH_ENDPOINT:?AI_SEARCH_ENDPOINT not set and could not be loaded from azd}"

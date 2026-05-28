@@ -9,12 +9,18 @@ param prefix string
 @description('Your public IP to allow portal/API access (leave empty for fully private)')
 param allowedIpAddress string = ''
 
+@description('Deploy AMPLS + LA + App Insights observability stack')
+param deployObservability bool = true
+
+@description('Deploy jumpbox VM + Bastion + NAT Gateway')
+param deployJumpbox bool = true
+
 @description('Admin username for the jumpbox VM')
 param vmAdminUsername string = 'azureadmin'
 
 @secure()
 @description('Admin password for the jumpbox VM')
-param vmAdminPassword string
+param vmAdminPassword string = ''
 
 // =====================================================================
 // 1. Network (VNet, subnets including DELEGATED agent subnet, NAT Gateway)
@@ -25,6 +31,7 @@ module network 'modules/network.bicep' = {
   params: {
     location: location
     prefix: prefix
+    deployNatGateway: deployJumpbox
   }
 }
 
@@ -97,9 +104,11 @@ module privateEndpoints 'modules/private-endpoints.bicep' = {
 //     Created BEFORE the project so the project AppInsights connection
 //     can reference it. Lives behind a private endpoint (groupId:
 //     azuremonitor) and ingestion/query are PrivateOnly.
+//     Toggle with deployObservability=false to skip when reusing a
+//     central observability stack.
 // =====================================================================
 
-module observability 'modules/observability.bicep' = {
+module observability 'modules/observability.bicep' = if (deployObservability) {
   name: 'deploy-observability'
   params: {
     location: location
@@ -112,8 +121,7 @@ module observability 'modules/observability.bicep' = {
 
 // =====================================================================
 // 5. Foundry project + model deployments + BYO project connections
-//    Includes the App Insights connection so the agent runtime publishes
-//    telemetry to your private observability stack out of the box.
+//    Includes the App Insights connection only when deployObservability=true.
 // =====================================================================
 
 module foundryProject 'modules/ai-foundry-project.bicep' = {
@@ -133,8 +141,8 @@ module foundryProject 'modules/ai-foundry-project.bicep' = {
     storageId: storage.outputs.storageId
     storageLocation: location
     storageBlobEndpoint: storage.outputs.storageBlobEndpoint
-    appInsightsId: observability.outputs.appInsightsId
-    appInsightsConnectionString: observability.outputs.appInsightsConnectionString
+    appInsightsId: observability.?outputs.appInsightsId ?? ''
+    appInsightsConnectionString: observability.?outputs.appInsightsConnectionString ?? ''
   }
   dependsOn: [
     privateEndpoints
@@ -199,6 +207,7 @@ module postCaphostRoles 'modules/post-caphost-role-assignments.bicep' = {
 
 // =====================================================================
 // 9. Role assignments (account MI + jumpbox MI -> Search/Foundry)
+//    Jumpbox-specific assignments are skipped when deployJumpbox=false.
 // =====================================================================
 
 module roleAssignments 'modules/role-assignments.bicep' = {
@@ -207,15 +216,17 @@ module roleAssignments 'modules/role-assignments.bicep' = {
     aiFoundryPrincipalId: foundryAccount.outputs.aiFoundryPrincipalId
     aiFoundryId: foundryAccount.outputs.aiFoundryId
     searchId: aiSearch.outputs.searchId
-    jumpboxPrincipalId: jumpbox.outputs.vmPrincipalId
+    jumpboxPrincipalId: jumpbox.?outputs.vmPrincipalId ?? ''
   }
 }
 
 // =====================================================================
-// 10. Jumpbox VM + Bastion (for accessing the private Foundry portal)
+// 10. Jumpbox VM + Bastion (for accessing the private Foundry portal).
+//     Toggle with deployJumpbox=false to skip; in that case set
+//     allowedIpAddress to your public IP so you can reach Foundry directly.
 // =====================================================================
 
-module jumpbox 'modules/jumpbox.bicep' = {
+module jumpbox 'modules/jumpbox.bicep' = if (deployJumpbox) {
   name: 'deploy-jumpbox'
   params: {
     location: location
@@ -240,9 +251,9 @@ output aiSearchName string = aiSearch.outputs.searchName
 output aiSearchEndpoint string = aiSearch.outputs.searchEndpoint
 output cosmosName string = cosmos.outputs.cosmosName
 output storageName string = storage.outputs.storageName
-output jumpboxVmName string = jumpbox.outputs.vmName
-output bastionName string = jumpbox.outputs.bastionName
-output appInsightsName string = observability.outputs.appInsightsName
-output appInsightsId string = observability.outputs.appInsightsId
-output logAnalyticsWorkspaceId string = observability.outputs.logAnalyticsWorkspaceId
-output amplsId string = observability.outputs.amplsId
+output jumpboxVmName string = jumpbox.?outputs.vmName ?? ''
+output bastionName string = jumpbox.?outputs.bastionName ?? ''
+output appInsightsName string = observability.?outputs.appInsightsName ?? ''
+output appInsightsId string = observability.?outputs.appInsightsId ?? ''
+output logAnalyticsWorkspaceId string = observability.?outputs.logAnalyticsWorkspaceId ?? ''
+output amplsId string = observability.?outputs.amplsId ?? ''

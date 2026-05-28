@@ -45,6 +45,15 @@ if ($missing -and (Get-Command azd -ErrorAction SilentlyContinue)) {
     }
 }
 
+if (-not $env:JUMPBOX_VM_NAME) {
+    Write-Host "JUMPBOX_VM_NAME is empty. This usually means DEPLOY_JUMPBOX=false in the active azd env." -ForegroundColor Yellow
+    Write-Host "There is no jumpbox to index against. Either:" -ForegroundColor Yellow
+    Write-Host "  - run 'azd env set DEPLOY_JUMPBOX true' followed by 'azd provision', then re-run this script; or" -ForegroundColor Yellow
+    Write-Host "  - run 'scripts/setup_aisearch_index.py' directly from a machine that can reach AI Search privately" -ForegroundColor Yellow
+    Write-Host "    (after running 'pip install -r scripts/requirements.txt')." -ForegroundColor Yellow
+    exit 0
+}
+
 foreach ($v in $needed) {
     if (-not (Get-Item "env:$v" -ErrorAction SilentlyContinue)) {
         throw "$v not set and could not be loaded from azd. Run 'azd env get-values' to verify the env exists."
